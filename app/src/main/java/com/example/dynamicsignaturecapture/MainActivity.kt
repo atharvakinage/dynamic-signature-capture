@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Button
 import android.widget.Toast
+import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import com.github.gcacace.signaturepad.views.SignaturePad
 import android.graphics.Bitmap
@@ -49,18 +50,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var signaturePad: SignaturePad
     private val strokeMetrics = mutableListOf<StrokeMetric>()
     private val currentStroke = mutableListOf<StrokePoint>()
+    private var currentUserName: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val nameInput: EditText = findViewById(R.id.name_input)
 
         signaturePad = findViewById(R.id.signature_pad)
 
         val clearButton: Button = findViewById(R.id.clear_button)
         val saveButton: Button = findViewById(R.id.save_button)
 
-        clearButton.setOnClickListener { signaturePad.clear() }
+        clearButton.setOnClickListener {
+            signaturePad.clear()
+            currentUserName = ""
+            nameInput.text.clear()
+        }
         saveButton.setOnClickListener {
+            currentUserName = nameInput.text.toString().trim()
+            if (currentUserName.isEmpty()) {
+                Toast.makeText(this, "Please enter your name", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             if (checkPermissions()) {
                 saveSignature()
             } else {
@@ -74,7 +87,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onSigned() {
-                // Capture stroke points and calculate metrics
                 val points = signaturePad.points
                 val timestamp = System.currentTimeMillis()
 
@@ -181,18 +193,16 @@ class MainActivity : AppCompatActivity() {
             directory?.mkdirs()
 
             // Save signature image
-            val imageFile = File(directory, "signature_${System.currentTimeMillis()}.png")
+            val imageFile = File(directory, "$currentUserName-signature.png")
             FileOutputStream(imageFile).use { outputStream ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 80, outputStream)
             }
 
             // Save metrics
-            val metricsFile = File(directory, "signature_metrics_${System.currentTimeMillis()}.csv")
+            val metricsFile = File(directory, "$currentUserName-signature-metrics.csv")
             metricsFile.bufferedWriter().use { writer ->
-                // Write CSV header
                 writer.write("Timestamp,X,Y,Velocity,Acceleration,Direction,Pressure,StrokeNumber\n")
 
-                // Write data rows
                 strokeMetrics.forEach { metric ->
                     writer.write("""
                         ${metric.timestamp},
