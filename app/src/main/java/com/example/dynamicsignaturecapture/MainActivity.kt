@@ -3,6 +3,8 @@ package com.example.dynamicsignaturecapture
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.annotation.SuppressLint
+import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
 import android.widget.EditText
@@ -23,7 +25,7 @@ data class StrokePoint(
     val x: Float,
     val y: Float,
     val timestamp: Long,
-    val pressure: Float? = null
+    val pressure: Float
 )
 
 data class StrokeMetric(
@@ -33,7 +35,7 @@ data class StrokeMetric(
     val velocity: Float,
     val acceleration: Float,
     val direction: Float?,
-    val pressure: Float?,
+    val pressure: Float,
     val strokeNumber: Int
 )
 
@@ -51,7 +53,11 @@ class MainActivity : AppCompatActivity() {
     private val strokeMetrics = mutableListOf<StrokeMetric>()
     private val currentStroke = mutableListOf<StrokePoint>()
     private var currentUserName: String = ""
+    private var currentStrokeNumber = 0
+    private var lastPoint: StrokePoint? = null
 
+
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -67,6 +73,9 @@ class MainActivity : AppCompatActivity() {
             signaturePad.clear()
             currentUserName = ""
             nameInput.text.clear()
+            strokeMetrics.clear()
+            currentStrokeNumber = 0
+            lastPoint = null
         }
         saveButton.setOnClickListener {
             currentUserName = nameInput.text.toString().trim()
@@ -84,53 +93,111 @@ class MainActivity : AppCompatActivity() {
         signaturePad.setOnSignedListener(object : SignaturePad.OnSignedListener {
             override fun onStartSigning() {
                 currentStroke.clear()
+                currentStrokeNumber++
             }
 
             override fun onSigned() {
-                val points = signaturePad.points
-                val timestamp = System.currentTimeMillis()
-
-                if (points.isNotEmpty()) {
-                    for (i in 1 until points.size) {
-                        val point1 = StrokePoint(
-                            x = points[i - 1].x,
-                            y = points[i - 1].y,
-                            timestamp = timestamp + i * 10 // Simulated time difference
-                        )
-                        val point2 = StrokePoint(
-                            x = points[i].x,
-                            y = points[i].y,
-                            timestamp = timestamp + (i + 1) * 10
-                        )
-                        val velocity = calculateVelocity(point1, point2)
-                        val direction = calculateDirection(point1, point2)
-                        val acceleration = if (i > 1) calculateAcceleration(
-                            strokeMetrics.last().velocity,
-                            velocity,
-                            10 / 1000f
-                        ) else 0f
-
-                        strokeMetrics.add(
-                            StrokeMetric(
-                                timestamp = point2.timestamp,
-                                x = point2.x,
-                                y = point2.y,
-                                velocity = velocity,
-                                acceleration = acceleration,
-                                direction = direction,
-                                pressure = null,
-                                strokeNumber = 1
-                            )
-                        )
-                    }
-                }
+                processTouchPoints()
             }
 
             override fun onClear() {
                 strokeMetrics.clear()
+                currentStrokeNumber = 0
+                lastPoint = null
             }
         })
+
+        signaturePad.setOnTouchListener { _, event ->
+//            Toast.makeText(this,
+//                "${event.pressure} ${event.size}\n",
+//                Toast.LENGTH_SHORT).show()
+            Log.d("Size", "${event.pressure} - ${event.size}\n")
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+//                    val pressure = when {
+//                        event.device.sources and android.view.InputDevice.SOURCE_STYLUS != 0 -> event.pressure
+//                        else -> event.size
+//                    }
+                    val pressure = event.size
+
+                    val point = StrokePoint(
+                        x = event.x,
+                        y = event.y,
+                        timestamp = System.currentTimeMillis(),
+                        pressure = pressure
+                    )
+                    currentStroke.add(point)
+
+                    // Calculate metrics for this point
+                    lastPoint?.let { last ->
+                        val velocity = calculateVelocity(last, point)
+                        val direction = calculateDirection(last, point)
+                        val acceleration = if (strokeMetrics.isNotEmpty()) {
+                            calculateAcceleration(
+                                strokeMetrics.last().velocity,
+                                velocity,
+                                (point.timestamp - last.timestamp) / 1000f
+                            )
+                        } else 0f
+
+                        strokeMetrics.add(
+                            StrokeMetric(
+                                timestamp = point.timestamp,
+                                x = point.x,
+                                y = point.y,
+                                velocity = velocity,
+                                acceleration = acceleration,
+                                direction = direction,
+                                pressure = point.pressure,
+                                strokeNumber = currentStrokeNumber
+                            )
+                        )
+                    }
+                    lastPoint = point
+                }
+                MotionEvent.ACTION_UP -> {
+                    lastPoint = null
+                }
+            }
+            false
+        }
+
     }
+
+    private fun processTouchPoints(){
+        if (currentStroke.size < 2) return
+
+        for (i in 1 until currentStroke.size) {
+            val point1 = currentStroke[i - 1]
+            val point2 = currentStroke[i]
+
+            val velocity = calculateVelocity(point1, point2)
+            val direction = calculateDirection(point1, point2)
+            val acceleration = if (strokeMetrics.isNotEmpty()) {
+                calculateAcceleration(
+                    strokeMetrics.last().velocity,
+                    velocity,
+                    (point2.timestamp - point1.timestamp) / 1000f
+                )
+            } else 0f
+
+            strokeMetrics.add(
+                StrokeMetric(
+                    timestamp = point2.timestamp,
+                    x = point2.x,
+                    y = point2.y,
+                    velocity = velocity,
+                    acceleration = acceleration,
+                    direction = direction,
+                    pressure = point2.pressure,
+                    strokeNumber = currentStrokeNumber
+                )
+            )
+        }
+        currentStroke.clear()
+    }
+
+
 
     private fun checkPermissions(): Boolean {
         return REQUIRED_PERMISSIONS.all {
@@ -211,7 +278,7 @@ class MainActivity : AppCompatActivity() {
                         ${metric.velocity},
                         ${metric.acceleration},
                         ${metric.direction ?: ""},
-                        ${metric.pressure ?: ""},
+                        ${metric.pressure},
                         ${metric.strokeNumber}
                     """.trimIndent().replace("\n", "") + "\n")
                 }
