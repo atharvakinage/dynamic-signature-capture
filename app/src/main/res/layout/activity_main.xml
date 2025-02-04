@@ -5,11 +5,38 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <EditText
-        android:id="@+id/name_input"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:hint="Enter your name" />
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="16dp"
+        android:weightSum="2">
+
+        <EditText
+            android:id="@+id/name_input"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:hint="Enter user" />
+
+<!--        <EditText-->
+<!--            android:id="@+id/attempt_input"-->
+<!--            android:layout_width="wrap_content"-->
+<!--            android:layout_height="48dp"-->
+<!--            android:layout_weight="1"-->
+<!--            android:hint="Enter attempt" />-->
+
+        <NumberPicker
+            android:id="@+id/attempt_picker"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:orientation="horizontal"
+            android:scaleX="2.5"
+            android:scaleY="2.5"
+            android:layout_weight="1" />
+
+
+    </LinearLayout>
 
     <com.github.gcacace.signaturepad.views.SignaturePad
         android:id="@+id/signature_pad"
@@ -23,8 +50,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:weightSum="2"
-        android:paddingTop="16dp">
+        android:paddingTop="16dp"
+        android:weightSum="2">
 
         <Button
             android:id="@+id/clear_button"

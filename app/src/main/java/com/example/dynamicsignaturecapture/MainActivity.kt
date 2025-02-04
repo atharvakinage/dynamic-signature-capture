@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
 import android.widget.EditText
+import android.widget.NumberPicker
 import androidx.appcompat.app.AppCompatActivity
 import com.github.gcacace.signaturepad.views.SignaturePad
 import android.graphics.Bitmap
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private var currentUserName: String = ""
     private var currentStrokeNumber = 0
     private var lastPoint: StrokePoint? = null
+    private var attempNumber = 1
 
 
     @SuppressLint("ClickableViewAccessibility")
@@ -63,6 +65,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         val nameInput: EditText = findViewById(R.id.name_input)
+        val attempt: NumberPicker = findViewById(R.id.attempt_picker)
+        attempt.setMinValue(1)
+        attempt.setMaxValue(20)
 
         signaturePad = findViewById(R.id.signature_pad)
 
@@ -75,14 +80,17 @@ class MainActivity : AppCompatActivity() {
             nameInput.text.clear()
             strokeMetrics.clear()
             currentStrokeNumber = 0
+            attempt.value = 1
             lastPoint = null
         }
         saveButton.setOnClickListener {
             currentUserName = nameInput.text.toString().trim()
+            attempNumber = attempt.value
             if (currentUserName.isEmpty()) {
                 Toast.makeText(this, "Please enter your name", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+
             if (checkPermissions()) {
                 saveSignature()
             } else {
@@ -111,14 +119,14 @@ class MainActivity : AppCompatActivity() {
 //            Toast.makeText(this,
 //                "${event.pressure} ${event.size}\n",
 //                Toast.LENGTH_SHORT).show()
-            Log.d("Size", "${event.pressure} - ${event.size}\n")
+            Log.d("Size", "${event.pressure} - ${event.size * 10}\n")
             when (event.action) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
 //                    val pressure = when {
 //                        event.device.sources and android.view.InputDevice.SOURCE_STYLUS != 0 -> event.pressure
 //                        else -> event.size
 //                    }
-                    val pressure = event.size
+                    val pressure = event.size * 10
 
                     val point = StrokePoint(
                         x = event.x,
@@ -260,13 +268,13 @@ class MainActivity : AppCompatActivity() {
             directory?.mkdirs()
 
             // Save signature image
-            val imageFile = File(directory, "$currentUserName-signature.png")
+            val imageFile = File(directory, "$currentUserName-signature-$attempNumber.png")
             FileOutputStream(imageFile).use { outputStream ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 80, outputStream)
             }
 
             // Save metrics
-            val metricsFile = File(directory, "$currentUserName-signature-metrics.csv")
+            val metricsFile = File(directory, "$currentUserName-signature-metrics-$attempNumber.csv")
             metricsFile.bufferedWriter().use { writer ->
                 writer.write("Timestamp,X,Y,Velocity,Acceleration,Direction,Pressure,StrokeNumber\n")
 
