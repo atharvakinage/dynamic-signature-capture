@@ -15,6 +15,9 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.content.ContentValues
+import android.provider.MediaStore
+import android.os.Environment
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -40,34 +43,24 @@ data class StrokeMetric(
     val strokeNumber: Int
 )
 
+
 class MainActivity : AppCompatActivity() {
-
-    companion object {
-        private const val STORAGE_PERMISSION_CODE = 1
-        private val REQUIRED_PERMISSIONS = arrayOf(
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        )
-    }
-
     private lateinit var signaturePad: SignaturePad
     private val strokeMetrics = mutableListOf<StrokeMetric>()
     private val currentStroke = mutableListOf<StrokePoint>()
     private var currentUserName: String = ""
     private var currentStrokeNumber = 0
     private var lastPoint: StrokePoint? = null
-    private var attempNumber = 1
+    private var attemptNumber = 1
 
-
-    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         val nameInput: EditText = findViewById(R.id.name_input)
-        val attempt: NumberPicker = findViewById(R.id.attempt_picker)
-        attempt.setMinValue(1)
-        attempt.setMaxValue(20)
+        val attemptPicker: NumberPicker = findViewById(R.id.attempt_picker)
+        attemptPicker.minValue = 1
+        attemptPicker.maxValue = 20
 
         signaturePad = findViewById(R.id.signature_pad)
 
@@ -76,26 +69,21 @@ class MainActivity : AppCompatActivity() {
 
         clearButton.setOnClickListener {
             signaturePad.clear()
-            currentUserName = ""
             nameInput.text.clear()
             strokeMetrics.clear()
             currentStrokeNumber = 0
-            attempt.value = 1
+            attemptPicker.value = 1
             lastPoint = null
         }
+
         saveButton.setOnClickListener {
             currentUserName = nameInput.text.toString().trim()
-            attempNumber = attempt.value
+            attemptNumber = attemptPicker.value
             if (currentUserName.isEmpty()) {
                 Toast.makeText(this, "Please enter your name", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            if (checkPermissions()) {
-                saveSignature()
-            } else {
-                requestPermissions()
-            }
+            saveSignature()
         }
 
         signaturePad.setOnSignedListener(object : SignaturePad.OnSignedListener {
@@ -116,128 +104,42 @@ class MainActivity : AppCompatActivity() {
         })
 
         signaturePad.setOnTouchListener { _, event ->
-//            Toast.makeText(this,
-//                "${event.pressure} ${event.size}\n",
-//                Toast.LENGTH_SHORT).show()
-            Log.d("Size", "${event.pressure} - ${event.size * 10}\n")
             when (event.action) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-//                    val pressure = when {
-//                        event.device.sources and android.view.InputDevice.SOURCE_STYLUS != 0 -> event.pressure
-//                        else -> event.size
-//                    }
                     val pressure = event.size * 10
-
-                    val point = StrokePoint(
-                        x = event.x,
-                        y = event.y,
-                        timestamp = System.currentTimeMillis(),
-                        pressure = pressure
-                    )
+                    val point = StrokePoint(event.x, event.y, System.currentTimeMillis(), pressure)
                     currentStroke.add(point)
-
-                    // Calculate metrics for this point
                     lastPoint?.let { last ->
                         val velocity = calculateVelocity(last, point)
                         val direction = calculateDirection(last, point)
                         val acceleration = if (strokeMetrics.isNotEmpty()) {
-                            calculateAcceleration(
-                                strokeMetrics.last().velocity,
-                                velocity,
-                                (point.timestamp - last.timestamp) / 1000f
-                            )
+                            calculateAcceleration(strokeMetrics.last().velocity, velocity, (point.timestamp - last.timestamp) / 1000f)
                         } else 0f
-
                         strokeMetrics.add(
-                            StrokeMetric(
-                                timestamp = point.timestamp,
-                                x = point.x,
-                                y = point.y,
-                                velocity = velocity,
-                                acceleration = acceleration,
-                                direction = direction,
-                                pressure = point.pressure,
-                                strokeNumber = currentStrokeNumber
-                            )
+                            StrokeMetric(point.timestamp, point.x, point.y, velocity, acceleration, direction, point.pressure, currentStrokeNumber)
                         )
                     }
                     lastPoint = point
                 }
-                MotionEvent.ACTION_UP -> {
-                    lastPoint = null
-                }
+                MotionEvent.ACTION_UP -> lastPoint = null
             }
             false
         }
-
     }
 
-    private fun processTouchPoints(){
+    private fun processTouchPoints() {
         if (currentStroke.size < 2) return
-
         for (i in 1 until currentStroke.size) {
             val point1 = currentStroke[i - 1]
             val point2 = currentStroke[i]
-
             val velocity = calculateVelocity(point1, point2)
             val direction = calculateDirection(point1, point2)
             val acceleration = if (strokeMetrics.isNotEmpty()) {
-                calculateAcceleration(
-                    strokeMetrics.last().velocity,
-                    velocity,
-                    (point2.timestamp - point1.timestamp) / 1000f
-                )
+                calculateAcceleration(strokeMetrics.last().velocity, velocity, (point2.timestamp - point1.timestamp) / 1000f)
             } else 0f
-
-            strokeMetrics.add(
-                StrokeMetric(
-                    timestamp = point2.timestamp,
-                    x = point2.x,
-                    y = point2.y,
-                    velocity = velocity,
-                    acceleration = acceleration,
-                    direction = direction,
-                    pressure = point2.pressure,
-                    strokeNumber = currentStrokeNumber
-                )
-            )
+            strokeMetrics.add(StrokeMetric(point2.timestamp, point2.x, point2.y, velocity, acceleration, direction, point2.pressure, currentStrokeNumber))
         }
         currentStroke.clear()
-    }
-
-
-
-    private fun checkPermissions(): Boolean {
-        return REQUIRED_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun requestPermissions() {
-        ActivityCompat.requestPermissions(
-            this,
-            REQUIRED_PERMISSIONS,
-            STORAGE_PERMISSION_CODE
-        )
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == STORAGE_PERMISSION_CODE) {
-            if (grantResults.isNotEmpty() &&
-                grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                Toast.makeText(this, "Storage permissions granted", Toast.LENGTH_SHORT).show()
-                saveSignature()
-            } else {
-                Toast.makeText(this,
-                    "Storage permissions required to save signature",
-                    Toast.LENGTH_LONG).show()
-            }
-        }
     }
 
     private fun calculateVelocity(p1: StrokePoint, p2: StrokePoint): Float {
@@ -255,52 +157,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveSignature() {
-        if (!checkPermissions()) {
-            Toast.makeText(this, "Storage permissions required", Toast.LENGTH_SHORT).show()
-            return
-        }
-
+        val resolver = contentResolver
         val bitmap = signaturePad.signatureBitmap
-
         try {
-            // Create directory if it doesn't exist
-            val directory = getExternalFilesDir(null)
-            directory?.mkdirs()
-
-            // Save signature image
-            val imageFile = File(directory, "$currentUserName-signature-$attempNumber.png")
-            FileOutputStream(imageFile).use { outputStream ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 80, outputStream)
+            val imageValues = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, "$currentUserName-signature-$attemptNumber.png")
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Signatures")
             }
+            resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imageValues)?.let { uri ->
+                resolver.openOutputStream(uri)?.use { bitmap.compress(Bitmap.CompressFormat.PNG, 80, it) }
+            } ?: throw IOException("Failed to create image file")
 
-            // Save metrics
-            val metricsFile = File(directory, "$currentUserName-signature-metrics-$attempNumber.csv")
-            metricsFile.bufferedWriter().use { writer ->
-                writer.write("Timestamp,X,Y,Velocity,Acceleration,Direction,Pressure,StrokeNumber\n")
-
-                strokeMetrics.forEach { metric ->
-                    writer.write("""
-                        ${metric.timestamp},
-                        ${metric.x},
-                        ${metric.y},
-                        ${metric.velocity},
-                        ${metric.acceleration},
-                        ${metric.direction ?: ""},
-                        ${metric.pressure},
-                        ${metric.strokeNumber}
-                    """.trimIndent().replace("\n", "") + "\n")
+            val metricsValues = ContentValues().apply {
+                put(MediaStore.Files.FileColumns.DISPLAY_NAME, "$currentUserName-signature-metrics-$attemptNumber.csv")
+                put(MediaStore.Files.FileColumns.MIME_TYPE, "text/csv")
+                put(MediaStore.Files.FileColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/SignatureMetrics")
+            }
+            resolver.insert(MediaStore.Files.getContentUri("external"), metricsValues)?.let { uri ->
+                resolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                    writer.write("Timestamp,X,Y,Velocity,Acceleration,Direction,Pressure,StrokeNumber\n")
+                    strokeMetrics.forEach { writer.write("${it.timestamp},${it.x},${it.y},${it.velocity},${it.acceleration},${it.direction ?: ""},${it.pressure},${it.strokeNumber}\n") }
                 }
-            }
+            } ?: throw IOException("Failed to create metrics file")
 
-            Toast.makeText(this,
-                "Saved:\n${imageFile.absolutePath}\n${metricsFile.absolutePath}",
-                Toast.LENGTH_LONG).show()
-            Log.d("FileSave", "Signature saved at: ${imageFile.absolutePath}")
-            Log.d("FileSave", "Metrics saved at: ${metricsFile.absolutePath}")
+            Toast.makeText(this, "Signature & Metrics Saved!", Toast.LENGTH_LONG).show()
         } catch (e: IOException) {
             Toast.makeText(this, "Error saving: ${e.message}", Toast.LENGTH_SHORT).show()
-            Log.e("FileSave", "Error saving files", e)
         }
     }
-
 }
