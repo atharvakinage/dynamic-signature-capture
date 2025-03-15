@@ -3,6 +3,9 @@ package com.example.dynamicsignaturecapture
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.content.Intent
 import android.annotation.SuppressLint
 import android.view.MotionEvent
 import android.widget.Button
@@ -18,6 +21,8 @@ import androidx.core.content.ContextCompat
 import android.content.ContentValues
 import android.provider.MediaStore
 import android.os.Environment
+import android.widget.TextView
+import org.w3c.dom.Text
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -48,16 +53,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var signaturePad: SignaturePad
     private val strokeMetrics = mutableListOf<StrokeMetric>()
     private val currentStroke = mutableListOf<StrokePoint>()
-    private var currentUserName: String = ""
     private var currentStrokeNumber = 0
     private var lastPoint: StrokePoint? = null
     private var attemptNumber = 1
+    private var username: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val nameInput: EditText = findViewById(R.id.name_input)
         val attemptPicker: NumberPicker = findViewById(R.id.attempt_picker)
         attemptPicker.minValue = 1
         attemptPicker.maxValue = 20
@@ -66,24 +70,30 @@ class MainActivity : AppCompatActivity() {
 
         val clearButton: Button = findViewById(R.id.clear_button)
         val saveButton: Button = findViewById(R.id.save_button)
+        val backButton: Button = findViewById(R.id.back_button)
+        val usernameDisplay: TextView = findViewById(R.id.display_username)
+
+        username = intent.getStringExtra("USERNAME") ?: "Unknown user"
+        usernameDisplay.text = "User: $username"
 
         clearButton.setOnClickListener {
             signaturePad.clear()
-            nameInput.text.clear()
             strokeMetrics.clear()
             currentStrokeNumber = 0
             attemptPicker.value = 1
             lastPoint = null
+            Toast.makeText(this, "Signature cleared", Toast.LENGTH_SHORT).show()
         }
 
         saveButton.setOnClickListener {
-            currentUserName = nameInput.text.toString().trim()
             attemptNumber = attemptPicker.value
-            if (currentUserName.isEmpty()) {
-                Toast.makeText(this, "Please enter your name", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
             saveSignature()
+        }
+
+        backButton.setOnClickListener {
+            val intent = Intent(this, UserEntryActivity::class.java)
+            startActivity(intent)
+            finish()
         }
 
         signaturePad.setOnSignedListener(object : SignaturePad.OnSignedListener {
@@ -161,7 +171,7 @@ class MainActivity : AppCompatActivity() {
         val bitmap = signaturePad.signatureBitmap
         try {
             val imageValues = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "$currentUserName-signature-$attemptNumber.png")
+                put(MediaStore.Images.Media.DISPLAY_NAME, "$username-signature-$attemptNumber.png")
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Signatures")
             }
@@ -170,7 +180,7 @@ class MainActivity : AppCompatActivity() {
             } ?: throw IOException("Failed to create image file")
 
             val metricsValues = ContentValues().apply {
-                put(MediaStore.Files.FileColumns.DISPLAY_NAME, "$currentUserName-signature-metrics-$attemptNumber.csv")
+                put(MediaStore.Files.FileColumns.DISPLAY_NAME, "$username-signature-metrics-$attemptNumber.csv")
                 put(MediaStore.Files.FileColumns.MIME_TYPE, "text/csv")
                 put(MediaStore.Files.FileColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/SignatureMetrics")
             }
