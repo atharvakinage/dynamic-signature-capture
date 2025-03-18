@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity() {
     private var lastPoint: StrokePoint? = null
     private var attemptNumber = 1
     private var username: String = ""
+    private var isForged: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,15 +73,19 @@ class MainActivity : AppCompatActivity() {
         val saveButton: Button = findViewById(R.id.save_button)
         val backButton: Button = findViewById(R.id.back_button)
         val usernameDisplay: TextView = findViewById(R.id.display_username)
+        val statusText: TextView = findViewById(R.id.status_text)
 
+        isForged = intent.getBooleanExtra("SELECTED_TYPE", false)
         username = intent.getStringExtra("USERNAME") ?: "Unknown user"
         usernameDisplay.text = "User: $username"
+        Log.d("type=", isForged.toString())
+        statusText.text = if (isForged) "Forged" else "Genuine"
+
 
         clearButton.setOnClickListener {
             signaturePad.clear()
             strokeMetrics.clear()
             currentStrokeNumber = 0
-            attemptPicker.value = 1
             lastPoint = null
             Toast.makeText(this, "Signature cleared", Toast.LENGTH_SHORT).show()
         }
@@ -112,6 +117,7 @@ class MainActivity : AppCompatActivity() {
                 lastPoint = null
             }
         })
+
 
         signaturePad.setOnTouchListener { _, event ->
             when (event.action) {
@@ -170,8 +176,9 @@ class MainActivity : AppCompatActivity() {
         val resolver = contentResolver
         val bitmap = signaturePad.signatureBitmap
         try {
+            val suffix = if (isForged) "-forged" else ""
             val imageValues = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "$username-signature-$attemptNumber.png")
+                put(MediaStore.Images.Media.DISPLAY_NAME, "$username-signature-$attemptNumber$suffix.png")
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Signatures")
             }
@@ -180,7 +187,7 @@ class MainActivity : AppCompatActivity() {
             } ?: throw IOException("Failed to create image file")
 
             val metricsValues = ContentValues().apply {
-                put(MediaStore.Files.FileColumns.DISPLAY_NAME, "$username-signature-metrics-$attemptNumber.csv")
+                put(MediaStore.Files.FileColumns.DISPLAY_NAME, "$username-signature-metrics-$attemptNumber$suffix.csv")
                 put(MediaStore.Files.FileColumns.MIME_TYPE, "text/csv")
                 put(MediaStore.Files.FileColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/SignatureMetrics")
             }

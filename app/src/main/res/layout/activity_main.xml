@@ -21,16 +21,35 @@
             android:orientation="horizontal"
             android:scaleX="2.5"
             android:scaleY="2.5" />
-        
+
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/display_username"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="User: "
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:weightSum="2">
+
+        <TextView
+            android:id="@+id/display_username"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="User: "
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/status_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Genuine"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:textAlignment="gravity"/>
+
+    </LinearLayout>
 
     <com.github.gcacace.signaturepad.views.SignaturePad
         android:id="@+id/signature_pad"
